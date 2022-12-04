@@ -1,5 +1,7 @@
 The Colorman project
+
 Watercolors for the Color Blind
+
 December 2, 2022
 
 I am mostly color-blind, and I love colors. This project is for anyone struggling to express themselves and are unsure of their color choices.
