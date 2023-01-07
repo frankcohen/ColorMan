@@ -1,0 +1,304 @@
+
+<!doctype html>
+<html>
+<head>
+	<meta charset="utf-8">
+	<title>WebRTC: Still photo capture demo</title>
+</head>
+<body>
+<div>
+	<h1>Capture and Display Experiment</h1>
+	<p>Use the browser WebRTC API to capture a still images
+		from a video stream from your laptop camera. then
+		save it in PNG format to the Reflections Suess SD Card
+		or <a href="https://github.com/frankcohen/EleksTubeIPSHack">EleksTubeIPS clock SPIFFs</a>
+	 <em>Original article:</em>
+		<a href="https://developer.mozilla.org/docs/Web/API/WebRTC_API/Taking_still_photos" target="_blank">Taking still photos with WebRTC</a>. <em>Original code:</em> <a href="https://github.com/mdn/samples-server/tree/master/s/webrtc-capturestill" target="_blank">https://github.com/mdn/samples-server/tree/master/s/webrtc-capturestill</a>. 2018-09-15 JFS.</p>
+	<p>Note: Chrome only allows this to work over HTTPS per <a href="https://developer.mozilla.org/docs/Web/API/MediaDevices/getUserMedia#Browser_compatibility" target="_blank">MDN</a>)</p>
+	<div style="position:relative; height: 240px;">
+		<div class="camera">
+			<video id="video">Video stream not available.</video>
+			<button id="startbutton">Take photo</button>
+		</div>
+		<div class="output0">
+			<img id="photo0" alt="The screen capture appears in this box. 0">
+		</div>
+		<div class="output1">
+			<img id="photo1" alt="The screen capture appears in this box. 1">
+		</div>
+		<div class="output2">
+			<img id="photo2" alt="The screen capture appears in this box. 2">
+		</div>
+		<div class="output3">
+			<img id="photo3" alt="The screen capture appears in this box. 3">
+		</div>
+		<div class="output4">
+			<img id="photo4" alt="The screen capture appears in this box. 4">
+		</div>
+		<div class="output5">
+			<img id="photo5" alt="The screen capture appears in this box. 5">
+		</div>
+	</div>
+	<!-- Hidden -->
+	<canvas id="canvas"></canvas>
+</div>
+<br><br>
+<div style="position:relative; height: 240px;">
+	<button id="uploadbutton">Upload images</button>&nbsp;&nbsp;&nbsp;
+	<a id="download" download="slice1.jpg" href="" onclick="download_img(this);">Download</a>&nbsp;&nbsp;&nbsp;
+	<a href="/showslice">Play one slice</a>
+</div>
+
+<style>
+.camera {
+  width: 340px;
+  position: absolute;
+}
+.output0 {
+  left: 360px;
+	width: 135px;
+	position: absolute;
+}
+.output1 {
+  left: 515px;
+	width: 135px;
+	position: absolute;
+}
+.output2 {
+  left: 670px;
+	width: 135px;
+	position: absolute;
+}
+.output3 {
+  left: 825px;
+	width: 135px;
+	position: absolute;
+}
+.output4 {
+  left: 980px;
+	width: 135px;
+	position: absolute;
+}
+.output5 {
+  left: 1135px;
+	width: 135px;
+	position: absolute;
+}
+#video {
+  border: 1px solid black;
+  box-shadow: 2px 2px 3px black;
+  width:320px;
+  height:240px;
+}
+#photo0, #photo1, #photo2, #photo3, #photo4, #photo5 {
+  border: 1px solid black;
+  box-shadow: 2px 2px 3px black;
+  width:135px;
+  height:240px;
+}
+#startbutton {
+  display:block;
+  position:relative;
+  margin-left:auto;
+  margin-right:auto;
+  bottom:32px;
+  background-color: rgba(0, 150, 0, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  box-shadow: 0px 0px 1px 2px rgba(0, 0, 0, 0.2);
+  font-size: 14px;
+  font-family: "Lucida Grande", "Arial", sans-serif;
+  color: rgba(255, 255, 255, 1.0);
+}
+#canvas {
+  display:none;
+}
+</style>
+<script>
+(function() {
+  // The width and height of the captured photo. We will set the
+  // width to the value defined here, but the height will be
+  // calculated based on the aspect ratio of the input stream.
+
+  var width = 135;    // We will scale the photo width to this
+  var height = 240;     // This will be computed based on the input stream
+
+  // |streaming| indicates whether or not we're currently streaming
+  // video from the camera. Obviously, we start at false.
+
+  var streaming = false;
+
+  // The various HTML elements we need to configure or control. These
+  // will be set by the startup() function.
+
+  var video = null;
+  var canvas = null;
+	var photo0 = null;
+	var photo1 = null;
+	var photo2 = null;
+	var photo3 = null;
+	var photo4 = null;
+	var photo5 = null;
+  var startbutton = null;
+	var uploadbutton = null;
+	var savebutton = null;
+
+	download_img = function(el) {
+		var image = canvas.toDataURL("image/jpeg", 1.0);
+		el.href = image;
+	};
+
+  function startup() {
+    video = document.getElementById('video');
+    canvas = document.getElementById('canvas');
+		photo0 = document.getElementById('photo0');
+		photo1 = document.getElementById('photo1');
+		photo2 = document.getElementById('photo2');
+		photo3 = document.getElementById('photo3');
+		photo4 = document.getElementById('photo4');
+		photo5 = document.getElementById('photo5');
+		startbutton = document.getElementById('startbutton');
+		uploadbutton = document.getElementById('uploadbutton');
+
+		navigator.mediaDevices.getUserMedia({video: true})
+		.then(function(stream) {
+	        video.srcObject = stream;
+	        video.play();
+		})
+		.catch(function(err) {
+		  console.log("An error occured! " + err);
+		});
+
+    video.addEventListener('canplay', function(ev){
+      if (!streaming) {
+        height = video.videoHeight / (video.videoWidth/width);
+
+        // Firefox currently has a bug where the height can't be read from
+        // the video, so we will make assumptions if this happens.
+
+        if (isNaN(height)) {
+          height = width / (4/3);
+        }
+
+        video.setAttribute('width', width);
+        video.setAttribute('height', height);
+        canvas.setAttribute('width', width);
+        canvas.setAttribute('height', height);
+        streaming = true;
+      }
+    }, false);
+
+    startbutton.addEventListener('click', function(ev){
+      takepicture();
+      ev.preventDefault();
+    }, false);
+
+		uploadbutton.addEventListener('click', function(ev){
+      uploadimages();
+      ev.preventDefault();
+    }, false);
+
+    clearphoto();
+  }
+
+  // Fill the photo with an indication that none has been
+  // captured.
+
+  function clearphoto() {
+    var context = canvas.getContext('2d');
+    context.fillStyle = "#AAA";
+    context.fillRect(0, 0, canvas.width, canvas.height);
+
+    var data = canvas.toDataURL("image/png");
+		photo0.setAttribute('src', data);
+		photo1.setAttribute('src', data);
+		photo2.setAttribute('src', data);
+		photo3.setAttribute('src', data);
+		photo4.setAttribute('src', data);
+		photo5.setAttribute('src', data);
+  }
+
+  // Capture a photo by fetching the current contents of the video
+  // and drawing it into a canvas, then converting that to a PNG
+  // format data URL. By drawing it on an offscreen canvas and then
+  // drawing that to the screen, we can change its size and/or apply
+  // other changes before drawing it.
+
+  function takepicture() {
+
+		if (width && height) {
+
+ 			var mywide = video.videoWidth;
+			mywide = mywide / 6;
+
+			canvas.width = 135;
+			canvas.height = 240;
+
+			canvas.getContext('2d').drawImage(video,0*mywide,0,mywide,height,0,0,135,240);
+			photo0.setAttribute('src', canvas.toDataURL('image/png') );
+
+			canvas.getContext('2d').drawImage(video,1*mywide,0,mywide,height,0,0,135,240);
+			photo1.setAttribute('src', canvas.toDataURL('image/png') );
+
+			canvas.getContext('2d').drawImage(video,2*mywide,0,mywide,height,0,0,135,240);
+			photo2.setAttribute('src', canvas.toDataURL('image/png') );
+
+			canvas.getContext('2d').drawImage(video,3*mywide,0,mywide,height,0,0,135,240);
+			photo3.setAttribute('src', canvas.toDataURL('image/png') );
+
+			canvas.getContext('2d').drawImage(video,4*mywide,0,mywide,height,0,0,135,240);
+			photo4.setAttribute('src', canvas.toDataURL('image/png') );
+
+			canvas.getContext('2d').drawImage(video,5*mywide,0,mywide,height,0,0,135,240);
+			photo5.setAttribute('src', canvas.toDataURL('image/png') );
+		} else {
+			clearphoto();
+		}
+  }
+
+	function uploadimages() {
+		canvas.getContext('2d').drawImage( photo1, 0, 0 );
+		var dataURL = canvas.toDataURL("image/jpeg", 1.0);
+
+		var oAjaxReq = new XMLHttpRequest();
+    oAjaxReq.submittedData = dataURL;
+
+	  oAjaxReq.onreadystatechange = function() {
+			 console.log("Uploading image");
+			 console.log(oAjaxReq.responseText);
+	  }
+		oAjaxReq.onload = function (oEvent)
+		{
+			 console.log("Uploaded");
+		}
+
+		oAjaxReq.open("post", "upload", true);
+
+		var bound = Date.now().toString(16);
+		var sBoundary = "----WebKitFormBoundary" + bound;
+
+		oAjaxReq.setRequestHeader("Content-Type", "multipart/form-data; boundary=" + sBoundary );
+
+		var mydata = "--" + sBoundary + "\r\n";
+
+		mydata += "Content-Disposition: form-data; name=\"name\"; filename=\"" + "slice1.jpg" + "\"\r\n";
+		mydata += "Content-Type: image/jpeg";
+		mydata += "\r\n";
+		mydata += "\r\n";
+
+		mydata += dataURL;
+
+		mydata += "\r\n";
+
+		mydata += "--" + sBoundary + "--";
+		mydata += "\r\n";
+
+		oAjaxReq.send( mydata );
+	}
+
+  // Set up our event listener to run the startup process
+  // once loading is complete.
+  window.addEventListener('load', startup, false);
+})();
+</script>
+</body>
+</html>
